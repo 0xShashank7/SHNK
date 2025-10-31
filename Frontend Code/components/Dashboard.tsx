@@ -3,15 +3,29 @@
 import { useAccount, useReadContract, useReadContracts, useWriteContract } from 'wagmi';
 import { CONTRACT_ADDRESS, MESSAGE_BOARD_ABI } from '@/lib/wagmi';
 import { formatEther } from 'viem';
-import { useEffect, useState } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Minter from './roles/MInter';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import Admin from './roles/Admin';
+import Pauser from './roles/Pauser';
+import Burn from './roles/Burn';
+import User from './roles/User';
 
 export default function Dashboard() {
     const { address, isConnected } = useAccount();
     const { writeContract } = useWriteContract();
 
-    debugger;
+    const queryClient = useQueryClient();
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleMintSuccess = () => {
+        window.location.reload();
+        setRefreshKey(prev => prev + 1);
+        // Invalidate all queries to refetch data
+        queryClient.invalidateQueries();
+    };
 
     const { data: adminRole } = useReadContract({
         address: CONTRACT_ADDRESS,
@@ -30,7 +44,6 @@ export default function Dashboard() {
         abi: MESSAGE_BOARD_ABI,
         functionName: 'MINTER_ROLE',
     });
-
 
     // Check if connected address has each role
     const { data: isAdmin } = useReadContract({
@@ -77,7 +90,7 @@ export default function Dashboard() {
         address: CONTRACT_ADDRESS,
         functionName: 'balanceOf',
         args: [address!], // Non-null assertion since we have the enabled check
-        query: { enabled: isConnected && !!address },
+        query: { enabled: isConnected && !!address, },
     });
 
     const { data: totalSupply } = useReadContract({
@@ -86,31 +99,36 @@ export default function Dashboard() {
         functionName: 'totalSupply',
     });
 
+    const { data: paused } = useReadContract({
+        abi: MESSAGE_BOARD_ABI,
+        address: CONTRACT_ADDRESS,
+        functionName: 'paused',
+    });
 
     if (!isConnected) {
         return (
-            <div className="container mx-auto p-4 py-8">
-                <p className="text-slate-300 text-base font-mono">Please connect your wallet to view the dashboard.</p>
+            <div className=" p-4 py-8 flex  items-center justify-between shadow-[inset_1px_1px_15px_rgba(255,255,255,1)] rounded-lg">
+                <p className="text-slate-100 text-base font-mono pl-2">Please connect your wallet to view the portfolio.</p>
+                <img className='size-40' src="/Warning.png" alt="Warning" />
             </div>
         );
     }
 
-    console.log('Name ', tokenName);
-    console.log('Symbol ', tokenSymbol);
-    console.log('Balance ', balance);
-    console.log('isAdmin Role is ', isAdmin);
-    console.log('isPauser Role is ', isPauser);
-    console.log('isMinter Role is ', isMinter);
+    const handleRefresh = () => {
+        window.location.reload();
+    };
 
     return (
-        <div className="container mx-auto p-4 space-y-8 ">
-            <div className="space-y-4">
+        <div className="  p-4 ">
+            <div className="mb-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="border rounded-lg p-4">
+                    <div className="border-2 border-white rounded-lg p-4 shadow-[inset_1px_1px_5px_rgba(255,255,255,1)]">
                         <h3 className="font-semibold text-slate-200 font-mono">Total Supply</h3>
-                        <p className="text-2xl text-slate-200 font-mono">{totalSupply ? formatEther(totalSupply) : '0'} {tokenSymbol}</p>
+                        <p className="text-2xl text-slate-200 font-mono">
+                            <span className='text-xl' >{totalSupply ? formatEther(totalSupply) : '0'} </span>
+                            {tokenSymbol}</p>
                     </div>
-                    <div className="border rounded-lg p-4">
+                    <div className="border-2 border-white rounded-lg p-4 shadow-[inset_1px_1px_5px_rgba(255,255,255,1)]">
                         <h3 className="font-semibold text-slate-200 font-mono">Your Roles</h3>
                         <div className="mt-2 space-y-1">
                             {isAdmin && <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-2">ADMIN</span>}
@@ -121,45 +139,78 @@ export default function Dashboard() {
                             )}
                         </div>
                     </div>
+                    <div className="border-2 border-white rounded-lg p-4 shadow-[inset_1px_1px_5px_rgba(255,255,255,1)]">
+                        <h3 className="font-semibold text-slate-200 font-mono">Token Status</h3>
+                        <div className="mt-2 space-y-1">
+                            {paused && <span className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded mr-2">PAUSED</span>}
+                            {!paused && <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded mr-2">ACTIVE</span>}
+                        </div>
+                    </div>
 
                 </div>
             </div>
 
 
             <Card>
-                <CardHeader>
-                    <CardTitle>Your Balance</CardTitle>
-                </CardHeader>
                 <CardContent>
-                    <div className="text-2xl">
-                        {balance ? `${formatEther(balance)} ${tokenSymbol}` : '0'}
+                    <div className='flex items-center justify-between'>
+                        <div>
+                            <CardTitle className='text-slate-200 font-mono mb-4'>Your Balance</CardTitle>
+                            <div className="text-2xl">
+                                {balance ? `${formatEther(balance)} ${tokenSymbol}` : '0'}
+                            </div>
+                        </div>
+                        <img className='w-20 h-20' src="/CoinsHistory.png" alt="Coins" />
                     </div>
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Admin Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-lg">
-                        {isAdmin ? '✅ Admin' : '❌ Not Admin'}
-                        {isAdmin && (
-                            <button
-                                onClick={() => writeContract({
-                                    address: CONTRACT_ADDRESS,
-                                    abi: MESSAGE_BOARD_ABI,
-                                    functionName: 'grantRole',
-                                    args: [adminRole!, address!],
-                                })}
-                                className="ml-4 px-4 py-2 border-[#1f508e] border-2 text-[#1f508e] rounded hover:shadow-[1px_1px_30px_#1f508e_inset] cursor-pointer transition-all duration-500 "
-                            >
-                                Make Me Admin
-                            </button>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+
+            {
+                address && isAdmin &&
+                <Admin
+                    handleRefresh={handleRefresh}
+                    contractAddr={CONTRACT_ADDRESS}
+                    address={address}
+                    MESSAGE_BOARD_ABI={MESSAGE_BOARD_ABI}
+                    isAdmin={isAdmin} />
+            }
+
+            <div className='grid grid-cols-2 gap-4 items-start' >
+
+                {
+                    isMinter && address &&
+                    <Minter
+                        handleRefresh={handleRefresh}
+                        contractAddr={CONTRACT_ADDRESS}
+                        address={address}
+                        MESSAGE_BOARD_ABI={MESSAGE_BOARD_ABI}
+                    />
+                }
+                {
+                    isMinter && address &&
+                    <Burn
+                        handleRefresh={handleRefresh}
+                        isMinter={isMinter}
+                        contractAddr={CONTRACT_ADDRESS}
+                        address={address}
+                        MESSAGE_BOARD_ABI={MESSAGE_BOARD_ABI}
+                    />
+                }
+                {
+                    address && isPauser &&
+                    <Pauser
+                        handleRefresh={handleRefresh}
+                        contractAddr={CONTRACT_ADDRESS}
+                        address={address}
+                        MESSAGE_BOARD_ABI={MESSAGE_BOARD_ABI}
+                        isPauser={isPauser} />
+                }
+                {
+                    !isAdmin && !isMinter && !isPauser &&
+                    <User />
+                }
+            </div>
         </div>
     );
 }
